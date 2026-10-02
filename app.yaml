@@ -1,0 +1,16 @@
+id: cone_cube_pyramid
+name: 几何体检测
+version: 2.1.2
+author: guyukk
+icon: app.png
+desc: 检测圆锥、正方体、棱锥、五棱柱及颜色并发送串口数据
+files:
+  - config.py
+  - coordinate.py
+  - main.py
+  - model_9338_npu.axmodel
+  - model_9338_vnpu.axmodel
+  - model_9338.mud
+  - protocol_handler.py
+  - protocol.py
+  - vision.py
