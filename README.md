@@ -64,9 +64,6 @@ vision.py
 coordinate.py
 ```
 
-将模型目录中的 `model_9338.mud`、`model_9338_npu.axmodel` 和
-`model_9338_vnpu.axmodel` 上传到 `/root/models/model-jihe/`。
-
 ### 2. 运行程序
 
 ```bash
@@ -83,8 +80,8 @@ python main.py
 ✓ GPIO初始化: B25 -> GPIOB25
 ✓ 串口初始化: /dev/ttyS4 @ 115200
 ✓ 协议版本: v2.0
-✓ 模型加载: /root/models/model-jihe/model_9338.mud
-✓ 摄像头: 640x512（采集精度提升2倍，保持原5:4显示比例）
+✓ 模型加载: /root/models/model-jihe/model_8988.mud
+✓ 摄像头: 320x256
 ✓ 显示器初始化
 ✓ 视觉检测器初始化
 ==================================================
@@ -429,16 +426,8 @@ python calibrate_hsv_v3.py
 ├── coordinate.py        ✅ 必需
 └── models/
     └── model-jihe/
-        ├── model_9338.mud       ✅ 必需
-        ├── model_9338_npu.axmodel   ✅ 必需
-        └── model_9338_vnpu.axmodel  ✅ 必需
+        └── model_8988.mud  ✅ 必需
 ```
-
-新模型类别为 `cone`、`cube`、`pyramid`、`5edge`。串口形状 ID `0x04` 现表示五棱柱（原长方形定义已调整），MCU 端需同步采用此映射。应用 ID 保持为 `cone_cube_pyramid`，用于更新原应用。
-
-主程序会读取标定工具保存的 `/root/roi_config.json`；如果设备上没有该文件，则使用 `config.py` 中的默认 ROI。该设备文件不随应用包覆盖。
-
-相机采集尺寸为标定基准 `320x256` 的2倍，ROI会按相同倍率缩放，因此视野中的相对检测区域不变。检测框、文字、ROI边框和跨帧匹配距离也会按倍率调整，保持显示大小和检测行为一致；更高分辨率会增加摄像头采集和颜色分析的内存/计算开销。
 
 ### 启动
 
@@ -454,8 +443,7 @@ python main.py
 - **协议版本**: v2.0
 - **Python**: MaixPy (Python 3)
 - **硬件**: MaixCAM2
-- **应用版本**: 2.1.2
-- **日期**: 2026-09-27
+- **日期**: 2024
 
 ---
 

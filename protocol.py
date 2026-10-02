@@ -67,7 +67,7 @@ class Protocol:
     SHAPE_CIRCLE = 0x01
     SHAPE_SQUARE = 0x02
     SHAPE_TRIANGLE = 0x03
-    SHAPE_PENTAGON = 0x04
+    SHAPE_RECT = 0x04
     SHAPE_HEXAGON = 0x05
     SHAPE_IRREGULAR = 0x06
 
@@ -311,7 +311,7 @@ SHAPE_NAMES = {
     Protocol.SHAPE_CIRCLE: "圆形",
     Protocol.SHAPE_SQUARE: "方形",
     Protocol.SHAPE_TRIANGLE: "三角形",
-    Protocol.SHAPE_PENTAGON: "五棱柱",
+    Protocol.SHAPE_RECT: "长方形",
     Protocol.SHAPE_HEXAGON: "六边形",
     Protocol.SHAPE_IRREGULAR: "异形"
 }

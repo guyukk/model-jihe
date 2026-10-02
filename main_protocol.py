@@ -1,7 +1,5 @@
 import cv2
-import json
 import numpy as np
-import os
 import time as pytime
 
 from maix import app, camera, display, image, nn, gpio, pinmap, time, sys, err, uart
@@ -24,10 +22,7 @@ serial = uart.UART("/dev/ttyS4", 115200)
 proto = proto_module.Protocol()
 coordinate_converter = CoordinateConverter()
 
-MODEL = "/root/models/model-jihe/model_9338.mud"
-CAMERA_WIDTH = 320
-CAMERA_HEIGHT = 256
-ROI_CONFIG_PATH = "/root/roi_config.json"
+MODEL = "/root/models/model-jihe/model_8988.mud"
 
 # ROI配置（基于320x256分辨率标定）
 roi = {
@@ -36,20 +31,6 @@ roi = {
     "width": 170,
     "height": 165
 }
-if os.path.exists(ROI_CONFIG_PATH):
-    with open(ROI_CONFIG_PATH, "r") as roi_file:
-        saved_roi = json.load(roi_file)
-    if not isinstance(saved_roi, dict):
-        raise ValueError(f"ROI配置必须是JSON对象: {ROI_CONFIG_PATH}")
-    for key in ("x", "y", "width", "height"):
-        value = saved_roi.get(key)
-        if isinstance(value, bool) or not isinstance(value, int):
-            raise ValueError(f"ROI配置字段 {key} 必须为整数: {ROI_CONFIG_PATH}")
-        roi[key] = value
-    if (roi["x"] < 0 or roi["y"] < 0 or roi["width"] <= 0 or
-            roi["height"] <= 0 or roi["x"] + roi["width"] > CAMERA_WIDTH or
-            roi["y"] + roi["height"] > CAMERA_HEIGHT):
-        raise ValueError(f"ROI配置超出标定分辨率范围: {ROI_CONFIG_PATH}")
 print(f"ROI配置: ({roi['x']}, {roi['y']}) {roi['width']}x{roi['height']}")
 
 # HSV thresholds
@@ -69,8 +50,7 @@ PIXEL_SAMPLE_STEP = 2
 SHAPE_MAP = {
     "cube": proto_module.Protocol.SHAPE_SQUARE,
     "cone": proto_module.Protocol.SHAPE_CIRCLE,
-    "pyramid": proto_module.Protocol.SHAPE_TRIANGLE,
-    "5edge": proto_module.Protocol.SHAPE_PENTAGON
+    "pyramid": proto_module.Protocol.SHAPE_TRIANGLE
 }
 
 # 颜色映射（HSV检测 -> 协议ID）
@@ -294,12 +274,14 @@ def process_incoming_frames():
 
 # 初始化检测器和摄像头
 detector = nn.YOLO26(model=MODEL)
+CAMERA_WIDTH = detector.input_width()
+CAMERA_HEIGHT = detector.input_height()
 cam = camera.Camera(CAMERA_WIDTH, CAMERA_HEIGHT, image.Format.FMT_RGB888)
 disp = display.Display()
 
 # ROI坐标缩放
-ROI_CALIBRATION_WIDTH = CAMERA_WIDTH
-ROI_CALIBRATION_HEIGHT = CAMERA_HEIGHT
+ROI_CALIBRATION_WIDTH = 320
+ROI_CALIBRATION_HEIGHT = 256
 scale_x = CAMERA_WIDTH / ROI_CALIBRATION_WIDTH
 scale_y = CAMERA_HEIGHT / ROI_CALIBRATION_HEIGHT
 roi_scaled = {

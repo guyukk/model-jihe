@@ -17,7 +17,6 @@ class VisionDetector:
         self.detector = detector
         self.camera_width = camera_width
         self.camera_height = camera_height
-        self.ui_scale = camera_width / config.ROI_CALIBRATION_WIDTH
 
         # HSV阈值
         self.lower_blue = np.array(config.LOWER_BLUE, dtype=np.uint8)
@@ -159,7 +158,7 @@ class VisionDetector:
             if width <= 0 or height <= 0:
                 return "unknown", 0.0, {}
 
-        step = max(1, round(config.PIXEL_SAMPLE_STEP * self.roi_scale_x))
+        step = config.PIXEL_SAMPLE_STEP
         sample_width = (width + step - 1) // step
         sample_height = (height + step - 1) // step
         rgb_roi = np.empty((sample_height, sample_width, 3), dtype=np.uint8)
@@ -301,7 +300,7 @@ class VisionDetector:
         """
         frame_count = getattr(config, "SCAN_FRAME_COUNT", 3)
         min_hits = getattr(config, "SCAN_MIN_HITS", 2)
-        match_dist = getattr(config, "SCAN_MATCH_DIST", 20) * self.roi_scale_x
+        match_dist = getattr(config, "SCAN_MATCH_DIST", 20)
         delay_ms = getattr(config, "SCAN_FRAME_DELAY_MS", 50)
         debug = getattr(config, "SCAN_DEBUG_LOG", True)
 
@@ -407,16 +406,14 @@ class VisionDetector:
         """在图像上绘制ROI"""
         roi = self.roi_scaled
         img.draw_rect(roi["x"], roi["y"], roi["width"], roi["height"],
-                     color=image.COLOR_BLUE, thickness=max(1, round(2 * self.ui_scale)))
+                     color=image.COLOR_BLUE, thickness=2)
 
     def draw_detections(self, img, detections):
         """在图像上绘制检测结果"""
         for shape_name, color_name, norm_x, norm_y, bbox, score in detections:
             x, y, w, h = bbox
-            img.draw_rect(x, y, w, h, color=image.COLOR_RED,
-                          thickness=max(1, round(2 * self.ui_scale)))
+            img.draw_rect(x, y, w, h, color=image.COLOR_RED, thickness=2)
             img.draw_string(x, y, f"{shape_name} {color_name}",
-                            color=image.COLOR_RED, scale=0.8 * self.ui_scale)
-            img.draw_string(x, y + round(15 * self.ui_scale),
-                            f"({norm_x:.2f},{norm_y:.2f})",
-                            color=image.COLOR_GREEN, scale=0.7 * self.ui_scale)
+                          color=image.COLOR_RED, scale=0.8)
+            img.draw_string(x, y + 15, f"({norm_x:.2f},{norm_y:.2f})",
+                          color=image.COLOR_GREEN, scale=0.7)

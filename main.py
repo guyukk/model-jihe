@@ -36,10 +36,9 @@ class SortingVisionApp:
         print(f"✓ 模型加载: {config.MODEL_PATH}")
 
         # 初始化摄像头
-        # Capture at higher detail while preserving the calibrated 5:4 aspect ratio.
-        self.camera_width = config.ROI_CALIBRATION_WIDTH * config.CAMERA_SCALE_FACTOR
-        self.camera_height = config.ROI_CALIBRATION_HEIGHT * config.CAMERA_SCALE_FACTOR
-        self.ui_scale = config.CAMERA_SCALE_FACTOR
+        # Keep the calibrated camera/display geometry independent of the model input size.
+        self.camera_width = config.ROI_CALIBRATION_WIDTH
+        self.camera_height = config.ROI_CALIBRATION_HEIGHT
         self.cam = camera.Camera(
             self.camera_width,
             self.camera_height,
@@ -110,10 +109,8 @@ class SortingVisionApp:
         link_color = image.COLOR_GREEN if self.protocol.link_alive else image.COLOR_RED
 
         # 绘制状态
-        img.draw_string(round(5 * self.ui_scale), round(5 * self.ui_scale), f"{state_text}",
-                        color=image.COLOR_GREEN, scale=1.2 * self.ui_scale)
-        img.draw_string(round(5 * self.ui_scale), round(25 * self.ui_scale), f"{link_text}",
-                        color=link_color, scale=1.0 * self.ui_scale)
+        img.draw_string(5, 5, f"{state_text}", color=image.COLOR_GREEN, scale=1.2)
+        img.draw_string(5, 25, f"{link_text}", color=link_color, scale=1.0)
 
     def _execute_scan(self):
         """执行扫描检测（含稳定等待、旧帧冲刷、多帧投票）
@@ -156,8 +153,7 @@ class SortingVisionApp:
         # 显示扫描中
         # 注意：该文字及之前绘制的ROI框/状态文字会污染图像，
         # 检测前必须重新读取干净帧，严禁在绘制过的图上检测！
-        img.draw_string(round(80 * self.ui_scale), round(100 * self.ui_scale), "Scanning...",
-                        color=image.COLOR_YELLOW, scale=1.5 * self.ui_scale)
+        img.draw_string(80, 100, "Scanning...", color=image.COLOR_YELLOW, scale=1.5)
         self.disp.show(img)
 
         # 执行检测（含详细过程日志）
@@ -188,8 +184,7 @@ class SortingVisionApp:
 
         print("[RECHECK] 开始复核扫描...")
 
-        img.draw_string(round(80 * self.ui_scale), round(100 * self.ui_scale), "Rechecking...",
-                        color=image.COLOR_YELLOW, scale=1.5 * self.ui_scale)
+        img.draw_string(80, 100, "Rechecking...", color=image.COLOR_YELLOW, scale=1.5)
         self.disp.show(img)
 
         # 复用扫描流程
@@ -218,10 +213,9 @@ class SortingVisionApp:
         self.protocol.dump_display_pending = False
         self.protocol.current_state = proto_module.Protocol.STATE_DUMPING
 
-        img.draw_rect(0, round(100 * self.ui_scale), self.camera_width, round(60 * self.ui_scale),
+        img.draw_rect(0, 100, self.camera_width, 60,
                       color=image.COLOR_BLACK, thickness=-1)
-        img.draw_string(round(60 * self.ui_scale), round(115 * self.ui_scale), "Dump Done",
-                        color=image.COLOR_GREEN, scale=1.5 * self.ui_scale)
+        img.draw_string(60, 115, "Dump Done", color=image.COLOR_GREEN, scale=1.5)
         self.disp.show(img)
         time.sleep_ms(config.DISPLAY_DURATION)
 
@@ -236,14 +230,11 @@ class SortingVisionApp:
         total_ok, total, elapsed_s = self.protocol.finish_display_pending
         self.protocol.finish_display_pending = None
 
-        img.draw_rect(0, round(50 * self.ui_scale), self.camera_width, round(150 * self.ui_scale),
+        img.draw_rect(0, 50, self.camera_width, 150,
                       color=image.COLOR_BLACK, thickness=-1)
-        img.draw_string(round(20 * self.ui_scale), round(60 * self.ui_scale), "Match Finished!",
-                        color=image.COLOR_YELLOW, scale=1.5 * self.ui_scale)
-        img.draw_string(round(20 * self.ui_scale), round(95 * self.ui_scale), f"OK: {total_ok}/{total}",
-                        color=image.COLOR_GREEN, scale=1.5 * self.ui_scale)
-        img.draw_string(round(20 * self.ui_scale), round(130 * self.ui_scale), f"Time: {elapsed_s}s",
-                        color=image.COLOR_WHITE, scale=1.5 * self.ui_scale)
+        img.draw_string(20, 60, "Match Finished!", color=image.COLOR_YELLOW, scale=1.5)
+        img.draw_string(20, 95, f"OK: {total_ok}/{total}", color=image.COLOR_GREEN, scale=1.5)
+        img.draw_string(20, 130, f"Time: {elapsed_s}s", color=image.COLOR_WHITE, scale=1.5)
         self.disp.show(img)
         time.sleep_ms(2000)
 
@@ -271,22 +262,13 @@ class SortingVisionApp:
             cyan = getattr(image, "COLOR_CYAN", image.COLOR_WHITE)
 
             # 清空背景
-            img.draw_rect(0, round(50 * self.ui_scale), self.camera_width,
-                          round(150 * self.ui_scale),
-                          color=image.COLOR_BLACK, thickness=-1)
+            img.draw_rect(0, 50, self.camera_width, 150, color=image.COLOR_BLACK, thickness=-1)
 
             # 显示四要素
-            img.draw_string(round(20 * self.ui_scale), round(60 * self.ui_scale),
-                            f"序号: {seq_no}",
-                            color=image.COLOR_WHITE, scale=1.5 * self.ui_scale)
-            img.draw_string(round(20 * self.ui_scale), round(90 * self.ui_scale),
-                            f"{shape_name} {color_name}", color=cyan,
-                            scale=1.5 * self.ui_scale)
-            img.draw_string(round(20 * self.ui_scale), round(120 * self.ui_scale), result_text,
-                            color=result_color, scale=1.5 * self.ui_scale)
-            img.draw_string(round(20 * self.ui_scale), round(150 * self.ui_scale),
-                            f"累计: {total_ok}",
-                            color=image.COLOR_YELLOW, scale=1.5 * self.ui_scale)
+            img.draw_string(20, 60, f"序号: {seq_no}", color=image.COLOR_WHITE, scale=1.5)
+            img.draw_string(20, 90, f"{shape_name} {color_name}", color=cyan, scale=1.5)
+            img.draw_string(20, 120, result_text, color=result_color, scale=1.5)
+            img.draw_string(20, 150, f"累计: {total_ok}", color=image.COLOR_YELLOW, scale=1.5)
 
             self.disp.show(img)
             time.sleep_ms(config.DISPLAY_DURATION)

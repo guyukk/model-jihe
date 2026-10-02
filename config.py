@@ -6,8 +6,7 @@
 UART_PORT = "/dev/ttyS4"
 UART_BAUDRATE = 115200
 
-MODEL_PATH = "/root/models/model-jihe/model_9338.mud"
-ROI_CONFIG_PATH = "/root/roi_config.json"
+MODEL_PATH = "/root/models/model-jihe/model_8988.mud"
 
 # LED GPIO
 LED_PIN_NAME = "B25"  # maixcam2
@@ -17,7 +16,6 @@ LED_GPIO_NAME = "GPIOB25"
 # ROI标定基准分辨率
 ROI_CALIBRATION_WIDTH = 320
 ROI_CALIBRATION_HEIGHT = 256
-CAMERA_SCALE_FACTOR = 2
 
 # ROI区域（基于标定分辨率）
 ROI_X = 70
@@ -74,8 +72,7 @@ DISPLAY_DURATION = 500     # 四要素显示时长(毫秒)
 SHAPE_MAPPING = {
     "cube": 0x02,      # 方形
     "cone": 0x01,      # 圆形
-    "pyramid": 0x03,   # 三角形
-    "5edge": 0x04      # 五棱柱
+    "pyramid": 0x03    # 三角形
 }
 
 # ==================== 颜色映射 ====================
@@ -100,7 +97,7 @@ SCAN_FLUSH_FRAMES = 3       # 采样前丢弃的缓冲旧帧数量
 # 多帧投票检测：连续采多帧，跨帧合并，过滤偶发误检/漏检，提高稳定性
 SCAN_MULTI_FRAME = True     # True=多帧投票, False=单帧检测
 SCAN_FRAME_COUNT = 5        # 每次扫描采样帧数
-SCAN_MIN_HITS = 3           # 目标至少在几帧中出现才上报
+SCAN_MIN_HITS = 4           # 目标至少在几帧中出现才上报
 SCAN_MATCH_DIST = 20        # 跨帧匹配的最大中心距离(像素)
 SCAN_FRAME_DELAY_MS = 50    # 帧间延迟(毫秒)
 
