@@ -1,3 +1,10 @@
+"""历史版本主程序，已被根目录的 main.py 取代，仅作参考保留。"""
+import os
+import sys as _std_sys
+
+# 位于 legacy/ 子目录，把工程根目录加入模块搜索路径，保持可引用
+_std_sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import cv2
 import numpy as np
 import time as pytime

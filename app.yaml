@@ -1,14 +1,17 @@
-id: cone_cube_pyramid
+id: test1
 name: 几何体检测
-version: 2.0.0
+version: 3.1.0
 author: guyukk
 icon: app.png
-desc: 检测正方体，圆锥和四面体以及颜色并发送串口数据
+desc: 每2秒推送整盘快照，显示分拣结果后应答，协议v3.1
 files:
   - config.py
   - coordinate.py
+  - diagnostics.py
+  - link_service.py
   - main.py
   - model_8988.mud
   - protocol_handler.py
   - protocol.py
+  - screen_ui.py
   - vision.py

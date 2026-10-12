@@ -21,7 +21,7 @@
 ### 1. 运行标定工具
 
 ```bash
-python calibrate_hsv_thresholds.py
+python calibration/legacy/calibrate_hsv_thresholds.py
 ```
 
 ### 2. 串口命令说明

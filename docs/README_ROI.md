@@ -21,10 +21,10 @@
 
 ### 1. 运行标定工具
 
-将 `calibrate_roi_serial.py` 上传到MaixCAM2设备，然后运行：
+将 `calibration/calibrate_roi_serial.py` 上传到MaixCAM2设备，然后运行：
 
 ```bash
-python calibrate_roi_serial.py
+python calibration/calibrate_roi_serial.py
 ```
 
 ### 2. 通过串口调整ROI
@@ -80,7 +80,7 @@ ser.close()
 ## 修改或删除ROI配置
 
 ### 方法1：重新标定
-重新运行 `calibrate_roi_serial.py` 进行标定
+重新运行 `calibration/calibrate_roi_serial.py` 进行标定
 
 ### 方法2：手动编辑
 直接修改 `/root/roi_config.json` 文件中的坐标和尺寸

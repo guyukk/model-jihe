@@ -9,7 +9,7 @@
 
 ## 分辨率自动适配
 
-**标定分辨率**：320x256（calibrate_roi_serial.py使用的分辨率）  
+**标定分辨率**：320x256（calibration/calibrate_roi_serial.py使用的分辨率）  
 **运行分辨率**：由模型输入尺寸决定（main.py自动检测）  
 **自动缩放**：程序会自动将ROI坐标从320x256缩放到实际分辨率
 
@@ -57,7 +57,7 @@
 
 ### 方法1：重新标定（推荐）
 ```bash
-python calibrate_roi_serial.py
+python calibration/calibrate_roi_serial.py
 ```
 通过串口命令调整矩形，按Q保存。标定工具使用640x480分辨率，保存的配置会在main.py中自动缩放。
 
@@ -97,7 +97,7 @@ ROI缩放比例: x=0.500, y=0.467
 
 运行测试脚本验证功能：
 ```bash
-python test_roi_normalization.py
+python tests/test_roi_normalization.py
 ```
 
 测试结果已确认：

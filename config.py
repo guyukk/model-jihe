@@ -1,12 +1,45 @@
 """
 配置文件 - 所有可调参数集中管理
 """
+import os
 
 # ==================== 硬件配置 ====================
 UART_PORT = "/dev/ttyS4"
 UART_BAUDRATE = 115200
 
-MODEL_PATH = "/root/models/model-jihe/model_8988.mud"
+
+def _resolve_model_path():
+    """确定模型描述文件路径
+
+    优先用应用目录内的副本，这样整包安装后不依赖设备上预先存在的
+    /root/models/model-jihe/，换机或清理模型目录都能直接跑。
+    只有在应用目录内确实凑不齐 .mud 引用的权重时才退回旧路径，
+    避免"本地有 .mud 但权重缺失"导致加载失败。
+    """
+    local_dir = os.path.dirname(os.path.abspath(__file__))
+    local_mud = os.path.join(local_dir, "model_8988.mud")
+    fallback = "/root/models/model-jihe/model_8988.mud"
+
+    if not os.path.exists(local_mud):
+        return fallback
+
+    try:
+        with open(local_mud, "r") as f:
+            text = f.read()
+        for key in ("model_npu", "model_vnpu"):
+            for line in text.splitlines():
+                line = line.strip()
+                if line.startswith(key) and "=" in line:
+                    name = line.split("=", 1)[1].strip()
+                    if name and not os.path.exists(os.path.join(local_dir, name)):
+                        return fallback        # 权重不在包内，退回设备目录
+    except Exception:
+        return fallback
+
+    return local_mud
+
+
+MODEL_PATH = _resolve_model_path()
 
 # LED GPIO
 LED_PIN_NAME = "B25"  # maixcam2
@@ -88,6 +121,72 @@ COLOR_MAPPING = {
 SHOW_FPS = False
 SHOW_DEBUG_INFO = True
 
+# ==================== 屏幕交互配置 ====================
+# 是否允许屏幕"扫描"键手动触发检测。
+# v3.1 起快照本就每 2s 自动推一帧，该键只用于"立刻重扫一次"。
+MANUAL_SCAN_ENABLED = False  # 正式界面仅保留详情与退出
+UI_FONT_PATH = "/maixapp/share/font/SourceHanSansCN-Regular.otf"
+RESULT_STALE_SECONDS = 15.0
+
+# ==================== 托盘快照（协议 v3.1） ====================
+# v3.1 起 0x02 不再由 MCU 请求触发：视觉进程起来就每 SNAPSHOT_INTERVAL_MS
+# 主动扫描托盘并推一帧整盘快照；0x43 SCAN_REQ 作废。
+SNAPSHOT_INTERVAL_MS = 2000
+
+# 两次快照「首字节」间隔的硬上限。MCU 连续 2500ms 收不到任何字节就判失联，
+# 所以某一轮识别超过这个时限时必须重发上一帧（snap_seq 与内容都不变）：
+# 宁可重复，也不能让线路静默超过窗口。
+SNAPSHOT_MAX_GAP_MS = 2500
+# 到这一刻还没有新快照就先重发旧的，留出余量避免贴线
+SNAPSHOT_RESEND_AFTER_MS = 2200
+# 单帧最大件数（协议 §3.3）。超出时只发前 N 件，total 填实际发送条数
+SNAPSHOT_MAX_PIECES = 12
+
+# 坐标有效域（协议 §3.2 硬要求）：0 ≤ x ≤ 1800、0 ≤ y ≤ 2500，单位 0.1mm。
+# 越界的件 MCU 不会下发电机，判为"这一件放弃"并上报 PICK_REPORT(R_PARAM)。
+# 业务快照过滤越界件并记录统计，不钳位或伪造坐标。
+SNAPSHOT_COORD_X_MIN = 0
+SNAPSHOT_COORD_X_MAX = 1800
+SNAPSHOT_COORD_Y_MIN = 0
+SNAPSHOT_COORD_Y_MAX = 2500
+
+# ==================== 启动提示 ====================
+# AXERA 的媒体框架(VIN/VO/IVPS/POOL)、NPU 与 /dev/ttyS4 都是全局独占资源，
+# 被抢占时会出现：相机初始化抛 VO init failed，或 uart.UART 抛
+# ValueError: basic_string::_M_create / MemoryError，严重时 ISP 进坏状态
+# 每秒刷 os04d10 寄存器越界，最终整机复位。
+#
+# 正常路径：从设备屏幕点开应用，launcher 会先释放媒体驱动再拉起本程序，
+# 不会冲突。仅当从 SSH / MaixVision 直接启动、且 launcher 或其它应用还在
+# 占着媒体框架时才会出问题。
+#
+# 这里只做提示，不阻止启动、也不结束其它进程：
+# 实测从被抢占的进程内部去杀占用者会破坏 C++ 侧状态，反而触发
+# _M_create / bad_alloc，所以让路必须在启动本程序之前、在外部完成。
+WAIT_OTHER_APPS = True        # 是否列出仍在运行的其它 MaixCAM 应用
+APP_WAIT_TIMEOUT_MS = 10000   # 保留字段
+MEDIA_SETTLE_MS = 800         # 保留字段
+
+# ==================== 诊断日志 ====================
+# 每 DIAG_LOG_INTERVAL 秒把运行现场追加到 DIAG_LOG_PATH。
+# 每行都 flush，程序被杀死或整机重启后仍能读到最后的现场，
+# 用于排查"连着 MCU 才卡死/重启"这类只能在现场复现的问题。
+DIAG_LOG_ENABLED = True
+DIAG_LOG_PATH = "/root/diag.log"
+DIAG_LOG_INTERVAL = 2.0
+DIAG_LOG_MAX_BYTES = 2 * 1024 * 1024
+DIAG_LOG_BACKUPS = 3
+STARTUP_LOG_PATH = "/root/startup.log"
+LINK_LOG_PATH = "/root/link.log"
+
+# ==================== 故障取证 ====================
+# 冻结现场最有价值的信息是"主循环停在哪个调用"。冻结时进程通常还活着，
+# 只是某个调用不返回，此时 kill -USR1 <pid> 就能把所有 Python 线程栈
+# 写进 FAULT_DUMP_PATH，直接看到卡在哪一行，不需要额外调试工具。
+# 同时 faulthandler.enable() 会在段错误等致命信号时自动转储。
+FAULT_DUMP_ENABLED = True
+FAULT_DUMP_PATH = "/root/fault_dump.txt"
+
 # ==================== 扫描稳定性配置 ====================
 # 扫描前准备：解决"首轮扫描漏检，后续正常"问题
 # SCAN_REQ到达时托盘可能刚停稳，且摄像头缓冲区可能积压运动过程中的旧帧
@@ -97,12 +196,12 @@ SCAN_FLUSH_FRAMES = 3       # 采样前丢弃的缓冲旧帧数量
 # 多帧投票检测：连续采多帧，跨帧合并，过滤偶发误检/漏检，提高稳定性
 SCAN_MULTI_FRAME = True     # True=多帧投票, False=单帧检测
 SCAN_FRAME_COUNT = 5        # 每次扫描采样帧数
-SCAN_MIN_HITS = 4           # 目标至少在几帧中出现才上报
+SCAN_MIN_HITS = 3           # 目标至少在几帧中出现才上报
 SCAN_MATCH_DIST = 20        # 跨帧匹配的最大中心距离(像素)
 SCAN_FRAME_DELAY_MS = 50    # 帧间延迟(毫秒)
 
 # ==================== 调试日志配置 ====================
 # 扫描流程详细日志（排查漏检时开启）
-SCAN_DEBUG_LOG = True
+SCAN_DEBUG_LOG = False
 # 是否打印每个检测框的各颜色占比详情
-SCAN_DEBUG_COLOR_DETAIL = True
+SCAN_DEBUG_COLOR_DETAIL = False

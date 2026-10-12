@@ -6,12 +6,22 @@
 2. ROI内的物体坐标是否正确归一化到0-1范围
 """
 import json
+import os
 
 # 加载ROI配置
-with open('roi_config.json', 'r') as f:
+# 标定产物在 calibration/ 下；找不到就退回工程根目录，兼容旧位置
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_ROOT = os.path.dirname(_HERE)
+_CANDIDATES = [
+    os.path.join(_ROOT, "calibration", "roi_config.json"),
+    os.path.join(_ROOT, "roi_config.json"),
+    "roi_config.json",
+]
+ROI_CONFIG_PATH = next((p for p in _CANDIDATES if os.path.exists(p)), _CANDIDATES[0])
+with open(ROI_CONFIG_PATH, 'r') as f:
     roi = json.load(f)
 
-print("ROI配置:")
+print("ROI配置(%s):" % ROI_CONFIG_PATH)
 print(f"  左上角: ({roi['x']}, {roi['y']})")
 print(f"  右下角: ({roi['x'] + roi['width']}, {roi['y'] + roi['height']})")
 print(f"  尺寸: {roi['width']} x {roi['height']}\n")

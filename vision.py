@@ -205,11 +205,12 @@ class VisionDetector:
         debug = getattr(config, "SCAN_DEBUG_LOG", True)
         debug_color = getattr(config, "SCAN_DEBUG_COLOR_DETAIL", True)
 
-        detect_start = pytime.time()
+        detect_start = pytime.monotonic()
         objects = self.detector.detect(img,
                                       conf_th=config.YOLO_CONF_THRESHOLD,
                                       iou_th=config.YOLO_IOU_THRESHOLD)
-        detect_ms = (pytime.time() - detect_start) * 1000
+        detect_ms = (pytime.monotonic() - detect_start) * 1000
+        self.last_inference_ms = detect_ms
 
         stats = {"yolo_raw": len(objects), "roi_out": 0,
                  "color_unknown": 0, "accepted": 0}
@@ -289,12 +290,14 @@ class VisionDetector:
 
         return results
 
-    def detect_objects_stable(self, read_frame):
+    def detect_objects_stable(self, read_frame, service_protocol=None, wait_ms=None):
         """
         多帧投票检测：连续检测多帧，跨帧合并结果，过滤偶发误检/漏检
 
         Args:
             read_frame: 无参函数，每次调用返回一帧新的（干净）图像
+            service_protocol: 可选无参回调，在采集前与检测后服务协议
+            wait_ms: 可选等待回调，接收毫秒数；不提供时使用原来的 sleep
 
         返回: [(shape_name, color_name, norm_x, norm_y, bbox, score), ...]
         """
@@ -307,55 +310,89 @@ class VisionDetector:
         # 逐帧检测
         frame_dets = []
         frame_stats = []
+        self.last_frame_metrics = []
         for i in range(frame_count):
+            if service_protocol is not None:
+                service_protocol()
+            capture_start = pytime.monotonic()
             img = read_frame()
+            captured_at = pytime.monotonic()
             if debug:
                 print(f"[SCAN] ---- 第{i + 1}/{frame_count}帧 ----")
             dets = self.detect_objects(img)
+            self.last_frame_metrics.append(dict(
+                capture_copy_ms=round((captured_at - capture_start) * 1000, 3),
+                detect_total_ms=round((pytime.monotonic() - captured_at) * 1000, 3),
+                inference_ms=getattr(self, "last_inference_ms", None)))
             frame_dets.append(dets)
             frame_stats.append(dict(self.last_scan_stats))
+            if service_protocol is not None:
+                service_protocol()
             if i < frame_count - 1 and delay_ms > 0:
-                time.sleep_ms(delay_ms)
+                if wait_ms is None:
+                    time.sleep_ms(delay_ms)
+                else:
+                    wait_ms(delay_ms)
 
-        # 跨帧聚类：同一形状且中心距离小于阈值视为同一物料
-        clusters = []
-        for dets in frame_dets:
-            for det in dets:
-                shape_name, color_name, norm_x, norm_y, bbox, score = det
-                cx = bbox[0] + bbox[2] / 2
-                cy = bbox[1] + bbox[3] / 2
+        # 跨帧聚类
+        # 两条硬约束，缺一个就会算错票：
+        #   1) 同一帧里一个聚类最多吸收一个框（否则同帧的几个相邻框能凑满票数）
+        #   2) 一个框只归一个聚类（否则两件相距很近的物料会被并成一件）
+        # 票数按"出现过该目标的帧数"计，不按框数计。
+        def _det_center(det):
+            bbox = det[4]
+            return (bbox[0] + bbox[2] / 2, bbox[1] + bbox[3] / 2)
 
-                best = None
-                best_d = match_dist
-                for cluster in clusters:
+        def _cluster_center(cluster):
+            pts = [_det_center(d) for d in cluster["frames"].values()]
+            return (sum(p[0] for p in pts) / len(pts),
+                    sum(p[1] for p in pts) / len(pts))
+
+        clusters = []   # {"shape": str, "frames": {帧号: det}}
+        for fi, dets in enumerate(frame_dets):
+            # 2.1 列出本帧所有 (框, 已有聚类) 的候选配对
+            pairs = []
+            for di, det in enumerate(dets):
+                shape_name = det[0]
+                cx, cy = _det_center(det)
+                for ci, cluster in enumerate(clusters):
                     if cluster["shape"] != shape_name:
                         continue
-                    d = ((cluster["cx"] - cx) ** 2 +
-                         (cluster["cy"] - cy) ** 2) ** 0.5
-                    if d < best_d:
-                        best_d = d
-                        best = cluster
+                    if fi in cluster["frames"]:
+                        continue        # 该聚类本帧已命中，不能再收
+                    ccx, ccy = _cluster_center(cluster)
+                    d = ((ccx - cx) ** 2 + (ccy - cy) ** 2) ** 0.5
+                    if d < match_dist:
+                        pairs.append((d, di, ci))
 
-                if best is None:
-                    clusters.append({"shape": shape_name, "cx": cx, "cy": cy,
-                                     "hits": [det]})
-                else:
-                    best["hits"].append(det)
-                    n = len(best["hits"])
-                    best["cx"] = sum(h[4][0] + h[4][2] / 2
-                                     for h in best["hits"]) / n
-                    best["cy"] = sum(h[4][1] + h[4][3] / 2
-                                     for h in best["hits"]) / n
+            # 2.2 按距离由近到远贪心配对，保证一对一
+            pairs.sort(key=lambda p: p[0])
+            used_det = set()
+            used_clu = set()
+            for _d, di, ci in pairs:
+                if di in used_det or ci in used_clu:
+                    continue
+                used_det.add(di)
+                used_clu.add(ci)
+                clusters[ci]["frames"][fi] = dets[di]
+
+            # 2.3 本帧没配上的框各自新建一个聚类
+            for di, det in enumerate(dets):
+                if di in used_det:
+                    continue
+                clusters.append({"shape": det[0], "frames": {fi: det}})
 
         # 合并聚类结果
         merged = []
         for cluster in clusters:
-            hits = cluster["hits"]
-            if len(hits) < min_hits:
+            hits = list(cluster["frames"].values())
+            hit_frames = len(cluster["frames"])
+            if hit_frames < min_hits:
                 if debug:
+                    cx, cy = _cluster_center(cluster)
                     print(f"[SCAN] ✗ 丢弃不稳定目标: {cluster['shape']} "
-                          f"仅出现{len(hits)}/{frame_count}帧 "
-                          f"center=({cluster['cx']:.0f},{cluster['cy']:.0f})")
+                          f"仅出现{hit_frames}/{frame_count}帧 "
+                          f"center=({cx:.0f},{cy:.0f})")
                 continue
 
             # 坐标取均值，颜色取多数票（优先非unknown），分数取最高
@@ -378,7 +415,7 @@ class VisionDetector:
             if debug:
                 vote_str = " ".join(f"{c}x{n}" for c, n in color_votes.items())
                 print(f"[SCAN] ✓ 合并目标: {cluster['shape']}/{color_name} "
-                      f"出现{len(hits)}/{frame_count}帧 颜色投票[{vote_str}] "
+                      f"出现{hit_frames}/{frame_count}帧 颜色投票[{vote_str}] "
                       f"norm=({norm_x:.3f},{norm_y:.3f}) score={score:.3f}")
 
             merged.append((cluster["shape"], color_name,

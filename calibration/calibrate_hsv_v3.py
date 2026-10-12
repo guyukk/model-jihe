@@ -193,12 +193,31 @@ try:
         # 读取图像
         img = cam.read()
 
-        # 绘制中心准星
+        # ====================================================================
+        # 步骤1： 在任何绘制之前完成采样与掩码计算
+        # ====================================================================
+        # 说明：采样窗口位于画面正中，而分割线(x=160)、采样框边框、右侧白色
+        #      掩码都与它有重叠。若先画后采，采到的样本里混着界面颜色，
+        #      阈值会被越标越偏。所以采样必须用未经绘制的原始帧。
         center_x = CAMERA_WIDTH // 2
         center_y = CAMERA_HEIGHT // 2
         half_size = CENTER_SAMPLE_SIZE // 2
 
-        # 十字准星
+        # 1.1 中心区 HSV 采样（原始帧）
+        center_stats = sample_center_region(img)
+
+        # 1.2 掩码与覆盖率（原始帧）
+        rgb_array = sample_image_to_numpy(img)
+        hsv_array = cv2.cvtColor(rgb_array, cv2.COLOR_RGB2HSV)
+        thresh = thresholds[current_color]
+        mask = create_mask(hsv_array, thresh)
+        coverage = cv2.countNonZero(mask) / (mask.shape[0] * mask.shape[1]) * 100
+
+        # ====================================================================
+        # 步骤2： 绘制界面
+        # ====================================================================
+
+        # 2.1 十字准星
         img.draw_line(center_x - 30, center_y, center_x - half_size, center_y,
                      color=image.COLOR_GREEN, thickness=2)
         img.draw_line(center_x + half_size, center_y, center_x + 30, center_y,
@@ -208,54 +227,41 @@ try:
         img.draw_line(center_x, center_y + half_size, center_x, center_y + 30,
                      color=image.COLOR_GREEN, thickness=2)
 
-        # 采样区域框
+        # 2.2 采样区域框
         img.draw_rect(center_x - half_size, center_y - half_size,
                      CENTER_SAMPLE_SIZE, CENTER_SAMPLE_SIZE,
                      color=image.COLOR_GREEN, thickness=2)
 
-        # 采样并转换
-        rgb_array = sample_image_to_numpy(img)
-        hsv_array = cv2.cvtColor(rgb_array, cv2.COLOR_RGB2HSV)
-
-        # 创建掩码
-        thresh = thresholds[current_color]
-        mask = create_mask(hsv_array, thresh)
-
-        # 计算覆盖率
-        coverage = cv2.countNonZero(mask) / (mask.shape[0] * mask.shape[1]) * 100
-
-        # 绘制分割线（左侧原图，右侧掩码）
+        # 2.3 绘制分割线（左侧原图，右侧掩码）
         split_x = CAMERA_WIDTH // 2
         img.draw_line(split_x, 0, split_x, CAMERA_HEIGHT, color=image.COLOR_YELLOW, thickness=1)
 
-        # 在右侧绘制掩码
+        # 2.4 在右侧绘制掩码
         mask_small = cv2.resize(mask, (split_x, CAMERA_HEIGHT), interpolation=cv2.INTER_NEAREST)
         for y in range(CAMERA_HEIGHT):
             for x in range(split_x):
                 if mask_small[y, x] > 0:
                     img.draw_rect(split_x + x, y, 1, 1, color=image.COLOR_WHITE, thickness=-1)
 
-        # 显示信息
+        # 2.5 显示信息
         img.draw_string(5, 5, f"{current_color.upper()}",
                        color=thresholds[current_color]["color"], scale=1.5)
         img.draw_string(5, 30, f"Cov:{coverage:.0f}%", color=image.COLOR_GREEN, scale=1.2)
 
-        # 显示阈值
+        # 2.6 显示阈值
         img.draw_string(5, 50, f"L:{thresh['lower'][0]:3d},{thresh['lower'][1]:3d},{thresh['lower'][2]:3d}",
                        color=image.COLOR_YELLOW, scale=0.8)
         img.draw_string(5, 65, f"U:{thresh['upper'][0]:3d},{thresh['upper'][1]:3d},{thresh['upper'][2]:3d}",
                        color=image.COLOR_YELLOW, scale=0.8)
 
-        # 显示中心区域HSV值
-        if show_center_hsv:
-            center_stats = sample_center_region(img)
-            if center_stats:
-                img.draw_string(5, 85, f"H:{center_stats['h'][0]:3d}",
-                               color=image.COLOR_WHITE, scale=0.8)
-                img.draw_string(5, 100, f"S:{center_stats['s'][0]:3d}",
-                               color=image.COLOR_WHITE, scale=0.8)
-                img.draw_string(5, 115, f"V:{center_stats['v'][0]:3d}",
-                               color=image.COLOR_WHITE, scale=0.8)
+        # 2.7 显示中心区域HSV值（用步骤1 采到的值）
+        if show_center_hsv and center_stats:
+            img.draw_string(5, 85, f"H:{center_stats['h'][0]:3d}",
+                           color=image.COLOR_WHITE, scale=0.8)
+            img.draw_string(5, 100, f"S:{center_stats['s'][0]:3d}",
+                           color=image.COLOR_WHITE, scale=0.8)
+            img.draw_string(5, 115, f"V:{center_stats['v'][0]:3d}",
+                           color=image.COLOR_WHITE, scale=0.8)
 
         img.draw_string(5, 240, "Press G to sample", color=image.COLOR_WHITE, scale=0.7)
 
@@ -280,8 +286,9 @@ try:
                 print(f"→ 白色")
 
             # 一键采样
+            # 用步骤1 在原始帧上采到的结果，不能在这里重新采样 —
+            # 此时 img 已经画满界面，采到的会混进黄线/白掩码/绿框
             elif cmd == 'G':
-                center_stats = sample_center_region(img)
                 if center_stats:
                     auto_set_threshold_from_sample(center_stats, current_color)
                 else:

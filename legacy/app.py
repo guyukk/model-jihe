@@ -2,7 +2,15 @@
 智能分拣视觉系统 - 主应用
 MaixCAM2 视觉从站
 协议版本: v2.0
+
+历史版本，已被根目录的 main.py 取代，仅作参考保留。
 """
+import os
+import sys
+
+# 位于 legacy/ 子目录，把工程根目录加入模块搜索路径，保持可运行
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from maix import app, camera, display, image, nn, gpio, pinmap, time, sys, err, uart
 import time as pytime
 

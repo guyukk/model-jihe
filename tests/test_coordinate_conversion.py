@@ -1,5 +1,10 @@
 """Tests for transforming ROI detections into calibrated mechanical coordinates."""
+import os
+import sys
 import unittest
+
+# 允许从 tests/ 子目录直接运行
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from coordinate import CoordinateConverter
 
