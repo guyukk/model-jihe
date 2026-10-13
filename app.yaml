@@ -1,9 +1,9 @@
 id: test1
 name: 几何体检测
-version: 3.2.0
+version: 3.3.0
 author: guyukk
 icon: app.png
-desc: 每2秒推送整盘快照，显示分拣结果后应答，协议v3.1
+desc: 每2秒推送整盘快照(7类形状)，显示分拣结果后应答，协议v3.1
 files:
   - config.py
   - coordinate.py
@@ -11,9 +11,9 @@ files:
   - link_service.py
   - lab_color.py
   - main.py
-  - model_8988.mud
-  - model_8988_npu.axmodel
-  - model_8988_vnpu.axmodel
+  - model_9974.mud
+  - model_9974_npu.axmodel
+  - model_9974_vnpu.axmodel
   - protocol_handler.py
   - protocol.py
   - screen_ui.py

@@ -76,12 +76,15 @@ class Protocol:
     R_OTHER = 0xFF
 
     # 形状ID
-    SHAPE_CIRCLE = 0x01
-    SHAPE_SQUARE = 0x02
-    SHAPE_TRIANGLE = 0x03
-    SHAPE_RECT = 0x04
-    SHAPE_HEXAGON = 0x05
-    SHAPE_IRREGULAR = 0x06
+    SHAPE_CIRCLE = 0x01      # 圆锥
+    SHAPE_SQUARE = 0x02      # 立方体
+    SHAPE_TRIANGLE = 0x03    # 棱锥 (任意棱锥)
+    SHAPE_RECT = 0x04        # 长方体 (预留, 当前无模型 label)
+    SHAPE_HEXAGON = 0x05     # 六棱柱 (对应 6edge)
+    SHAPE_IRREGULAR = 0x06   # 异形 (未知 label 的兜底, 不可抓)
+    SHAPE_TRI_PRISM = 0x07   # 三棱柱 (对应 3edge, 9974 起)
+    SHAPE_PENTA_PRISM = 0x08 # 五棱柱 (对应 5edge, 9974 起)
+    SHAPE_CYLINDER = 0x09    # 圆柱 (对应 0edge, 9974 起)
 
     # 颜色ID
     COLOR_RED = 0x01
@@ -430,12 +433,15 @@ class Protocol:
 
 # 名称映射（用于显示）
 SHAPE_NAMES = {
-    Protocol.SHAPE_CIRCLE: "圆形",
-    Protocol.SHAPE_SQUARE: "方形",
-    Protocol.SHAPE_TRIANGLE: "三角形",
-    Protocol.SHAPE_RECT: "长方形",
-    Protocol.SHAPE_HEXAGON: "六边形",
-    Protocol.SHAPE_IRREGULAR: "异形"
+    Protocol.SHAPE_CIRCLE: "圆锥",
+    Protocol.SHAPE_SQUARE: "立方体",
+    Protocol.SHAPE_TRIANGLE: "棱锥",
+    Protocol.SHAPE_RECT: "长方体",
+    Protocol.SHAPE_HEXAGON: "六棱柱",
+    Protocol.SHAPE_IRREGULAR: "异形",
+    Protocol.SHAPE_TRI_PRISM: "三棱柱",
+    Protocol.SHAPE_PENTA_PRISM: "五棱柱",
+    Protocol.SHAPE_CYLINDER: "圆柱",
 }
 
 COLOR_NAMES = {

@@ -58,9 +58,9 @@ LABELS = {
     "next": "NEXT",
 }
 LABELS_ZH = dict(result="物料详情", exit="长按退出", back="返回", prev="上页", next="下页")
-SHAPES_EN = {1: "Cone", 2: "Cube", 3: "Pyramid", 4: "Cuboid", 5: "Hex prism", 6: "Irregular"}
+SHAPES_EN = {1: "Cone", 2: "Cube", 3: "Pyramid", 4: "Cuboid", 5: "Hex prism", 6: "Irregular", 7: "Tri prism", 8: "Penta prism", 9: "Cylinder"}
 COLORS_EN = {1: "Red", 2: "Orange", 3: "Yellow", 4: "Green", 5: "Blue", 6: "Purple", 7: "Black", 8: "White"}
-SHAPES_ZH = {1: "圆锥", 2: "立方体", 3: "棱锥", 4: "长方体", 5: "六棱柱", 6: "不规则"}
+SHAPES_ZH = {1: "圆锥", 2: "立方体", 3: "棱锥", 4: "长方体", 5: "六棱柱", 6: "不规则", 7: "三棱柱", 8: "五棱柱", 9: "圆柱"}
 COLORS_ZH = {1: "红色", 2: "橙色", 3: "黄色", 4: "绿色", 5: "蓝色", 6: "紫色", 7: "黑色", 8: "白色"}
 
 

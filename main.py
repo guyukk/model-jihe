@@ -780,6 +780,14 @@ class SortingVisionApp:
     @staticmethod
     def _draw_piece_picture(img, shape):
         """按形状 ID 绘制物料图示，避免快照重排后拿错实物裁剪图片。"""
+        if shape == 9:
+            # 圆柱：俯视即一个椭圆环，不叠多边形底座。
+            import math
+            ellipse = [(int(270 + 25 * math.cos(a * math.pi / 8)),
+                        int(100 + 12 * math.sin(a * math.pi / 8))) for a in range(16)]
+            for a, b in zip(ellipse, ellipse[1:] + ellipse[:1]):
+                img.draw_line(*a, *b, color=image.COLOR_WHITE, thickness=2)
+            return
         points = {
             1: [(270, 75), (245, 125), (295, 125)],
             2: [(246, 80), (286, 80), (286, 120), (246, 120)],
@@ -787,6 +795,8 @@ class SortingVisionApp:
             4: [(240, 90), (300, 90), (300, 120), (240, 120)],
             5: [(255, 80), (285, 80), (300, 100), (285, 120), (255, 120), (240, 100)],
             6: [(245, 85), (275, 80), (295, 100), (280, 125), (240, 110)],
+            7: [(270, 75), (245, 125), (295, 125)],          # 三棱柱: 三角轮廓(不加椭圆/棱线)
+            8: [(270, 78), (295, 95), (285, 125), (255, 125), (245, 95)],  # 五棱柱
         }.get(shape, [(245, 85), (295, 85), (270, 125)])
         for a, b in zip(points, points[1:] + points[:1]):
             img.draw_line(*a, *b, color=image.COLOR_WHITE, thickness=2)

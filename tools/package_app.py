@@ -114,8 +114,9 @@ def main():
             shutil.copy2(src, os.path.join(staging, name))
 
     # 步骤3： 确保 .mud 引用的权重与 .mud 同层
-    mud = os.path.join(staging, "model_8988.mud")
-    if os.path.exists(mud):
+    mud_name = next((n for n in meta["files"] if n.endswith(".mud")), None)
+    mud = os.path.join(staging, mud_name) if mud_name else None
+    if mud and os.path.exists(mud):
         for name in mud_assets(mud):
             if os.path.exists(os.path.join(staging, name)):
                 continue
@@ -136,10 +137,10 @@ def main():
     for name in meta["files"]:
         if not os.path.exists(os.path.join(staging, name)):
             errors.append("app.yaml 声明但包内缺失: %s" % name)
-    mud = os.path.join(staging, "model_8988.mud")
-    for name in mud_assets(mud):
-        if not os.path.exists(os.path.join(staging, name)):
-            errors.append(".mud 引用但包内缺失: %s" % name)
+    if mud and os.path.exists(mud):
+        for name in mud_assets(mud):
+            if not os.path.exists(os.path.join(staging, name)):
+                errors.append(".mud 引用但包内缺失: %s" % name)
     if errors:
         print("✗ 包内容校验失败:")
         for e in errors:

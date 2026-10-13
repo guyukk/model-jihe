@@ -7,28 +7,39 @@ UART_BAUDRATE = 115200
 
 
 def _resolve_model_path():
-    """本地 .mud 及其引用权重齐全时使用本地文件，否则用设备预装模型。"""
+    """本地 .mud 及其引用权重齐全时使用本地文件，否则用设备预装模型。
+
+    历史上 .mud 与权重都放在根；从 9974 起统一收纳到 models/，这里两处都探
+    一遍，取第一个"三件套齐全"的目录。这样 package_app 打包前的定位也一致。
+    """
     local_dir = os.path.dirname(os.path.abspath(__file__))
-    local_mud = os.path.join(local_dir, "model_8988.mud")
-    fallback = "/root/models/model-jihe/model_8988.mud"
+    mud_name = "model_9974.mud"
+    fallback = os.path.join("/root/models/model-jihe", mud_name)
 
-    if not os.path.exists(local_mud):
-        return fallback
+    for cand_dir in (os.path.join(local_dir, "models"), local_dir):
+        local_mud = os.path.join(cand_dir, mud_name)
+        if not os.path.exists(local_mud):
+            continue
+        try:
+            with open(local_mud, "r") as f:
+                text = f.read()
+            complete = True
+            for key in ("model_npu", "model_vnpu"):
+                for line in text.splitlines():
+                    line = line.strip()
+                    if line.startswith(key) and "=" in line:
+                        name = line.split("=", 1)[1].strip()
+                        if name and not os.path.exists(os.path.join(cand_dir, name)):
+                            complete = False
+                        break
+                if not complete:
+                    break
+            if complete:
+                return local_mud
+        except Exception:
+            continue
 
-    try:
-        with open(local_mud, "r") as f:
-            text = f.read()
-        for key in ("model_npu", "model_vnpu"):
-            for line in text.splitlines():
-                line = line.strip()
-                if line.startswith(key) and "=" in line:
-                    name = line.split("=", 1)[1].strip()
-                    if name and not os.path.exists(os.path.join(local_dir, name)):
-                        return fallback        # 权重不在包内，退回设备目录
-    except Exception:
-        return fallback
-
-    return local_mud
+    return fallback
 
 
 MODEL_PATH = _resolve_model_path()
@@ -103,11 +114,17 @@ LINK_TIMEOUT = 1.5         # 链路超时(秒)
 DISPLAY_DURATION = 500     # 四要素显示时长(毫秒)
 
 # ==================== 形状映射 ====================
-# 模型输出 -> 协议形状ID
+# 模型 label -> 协议形状ID (v3.1, 9974 起支持 7 类)
+# 0x04 长方形、0x06 异形 保留占位: 0x04 目前无模型类别使用,
+# 0x06 只作 main.py 中 SHAPE_MAPPING.get(shape, 6) 的未知兜底 (不可抓).
 SHAPE_MAPPING = {
-    "cube": 0x02,      # 方形
-    "cone": 0x01,      # 圆形
-    "pyramid": 0x03    # 三角形
+    "cone":    0x01,   # 圆锥
+    "cube":    0x02,   # 立方体
+    "pyramid": 0x03,   # 棱锥 (任意棱锥归此类)
+    "6edge":   0x05,   # 六棱柱 (复用旧 0x05 六边形/六棱柱 语义)
+    "3edge":   0x07,   # 三棱柱 (新)
+    "5edge":   0x08,   # 五棱柱 (新)
+    "0edge":   0x09,   # 圆柱 (新)
 }
 
 # ==================== 颜色映射 ====================
