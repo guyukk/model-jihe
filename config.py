@@ -1,6 +1,4 @@
-"""
-配置文件 - 所有可调参数集中管理
-"""
+"""设备端配置。长度单位见各项注释；修改后从桌面重启应用生效。"""
 import os
 
 # ==================== 硬件配置 ====================
@@ -9,13 +7,7 @@ UART_BAUDRATE = 115200
 
 
 def _resolve_model_path():
-    """确定模型描述文件路径
-
-    优先用应用目录内的副本，这样整包安装后不依赖设备上预先存在的
-    /root/models/model-jihe/，换机或清理模型目录都能直接跑。
-    只有在应用目录内确实凑不齐 .mud 引用的权重时才退回旧路径，
-    避免"本地有 .mud 但权重缺失"导致加载失败。
-    """
+    """本地 .mud 及其引用权重齐全时使用本地文件，否则用设备预装模型。"""
     local_dir = os.path.dirname(os.path.abspath(__file__))
     local_mud = os.path.join(local_dir, "model_8988.mud")
     fallback = "/root/models/model-jihe/model_8988.mud"
@@ -55,8 +47,12 @@ ROI_X = 70
 ROI_Y = 50
 ROI_WIDTH = 170
 ROI_HEIGHT = 165
+ROI_CONFIG_PATH = "/root/roi_config.json"  # 存在时覆盖上面四项
 
 # ==================== HSV颜色阈值 ====================
+# auto 在有效四色基础标定文件存在时启用 LAB；hsv 强制沿用旧判色。
+COLOR_MODE = "auto"
+LAB_CONFIG_PATH = "/root/lab_colors.json"
 # 蓝色
 LOWER_BLUE = [0, 132, 97]
 UPPER_BLUE = [93, 255, 255]
@@ -73,10 +69,16 @@ UPPER_RED = [156, 255, 255]
 LOWER_WHITE = [0, 0, 173]
 UPPER_WHITE = [179, 60, 255]
 
-# 颜色检测参数
-COLOR_MIN_RATIO = 0.05  # 最小颜色占比
+# 颜色检测：先用上述标定掩码；覆盖率不足时仍给出最可能颜色并标记为估测。
+# 此值是“可靠命中”门槛，不再是丢弃物料的门槛。
+COLOR_MIN_RATIO = 0.05
 PIXEL_SAMPLE_STEP = 2   # 像素采样步长
 COLOR_BOX_SHRINK = 0.6  # 颜色采样收缩到bbox中心区域比例(0~1)，减少边缘背景干扰
+# 所有掩码均为零时，根据 OpenCV HSV 色调选择红/黄/蓝；低饱和且足够亮判白。
+# 色调在 0..179 上成环，红色 0 与 179 相邻。此结果属于估测，不保证正确。
+COLOR_FALLBACK_HUES = {"red": 0, "yellow": 30, "blue": 120}
+COLOR_FALLBACK_WHITE_MAX_S = 60
+COLOR_FALLBACK_WHITE_MIN_V = 100
 
 # 红色Hue环绕区间（可选）：OpenCV HSV中红色跨0点(H~0-15 和 H~170-179)
 # 设置后红色掩码 = 范围1 OR 范围2，不需要时保持为 None
@@ -109,22 +111,19 @@ SHAPE_MAPPING = {
 }
 
 # ==================== 颜色映射 ====================
-# HSV检测结果 -> 协议颜色ID
+# LAB/HSV 检测结果 -> 协议颜色ID（协议 v3.1）
 COLOR_MAPPING = {
     "red": 0x01,
+    "orange": 0x02,
     "yellow": 0x03,
+    "green": 0x04,
     "blue": 0x05,
+    "purple": 0x06,
+    "black": 0x07,
     "white": 0x08
 }
 
-# ==================== 显示配置 ====================
-SHOW_FPS = False
-SHOW_DEBUG_INFO = True
-
 # ==================== 屏幕交互配置 ====================
-# 是否允许屏幕"扫描"键手动触发检测。
-# v3.1 起快照本就每 2s 自动推一帧，该键只用于"立刻重扫一次"。
-MANUAL_SCAN_ENABLED = False  # 正式界面仅保留详情与退出
 UI_FONT_PATH = "/maixapp/share/font/SourceHanSansCN-Regular.otf"
 RESULT_STALE_SECONDS = 15.0
 
@@ -136,9 +135,7 @@ SNAPSHOT_INTERVAL_MS = 2000
 # 两次快照「首字节」间隔的硬上限。MCU 连续 2500ms 收不到任何字节就判失联，
 # 所以某一轮识别超过这个时限时必须重发上一帧（snap_seq 与内容都不变）：
 # 宁可重复，也不能让线路静默超过窗口。
-SNAPSHOT_MAX_GAP_MS = 2500
-# 到这一刻还没有新快照就先重发旧的，留出余量避免贴线
-SNAPSHOT_RESEND_AFTER_MS = 2200
+# MCU 的 2500ms 静默超时由对端检查；通信进程的发送调度见 link_service.py。
 # 单帧最大件数（协议 §3.3）。超出时只发前 N 件，total 填实际发送条数
 SNAPSHOT_MAX_PIECES = 12
 
@@ -152,9 +149,8 @@ SNAPSHOT_COORD_Y_MAX = 2500
 
 # ==================== 启动提示 ====================
 # AXERA 的媒体框架(VIN/VO/IVPS/POOL)、NPU 与 /dev/ttyS4 都是全局独占资源，
-# 被抢占时会出现：相机初始化抛 VO init failed，或 uart.UART 抛
-# ValueError: basic_string::_M_create / MemoryError，严重时 ISP 进坏状态
-# 每秒刷 os04d10 寄存器越界，最终整机复位。
+# 媒体资源冲突曾伴随 VO init failed、UART 构造异常和 ISP 错误日志；
+# 这些现象尚不能单独证明整机重启的原因。
 #
 # 正常路径：从设备屏幕点开应用，launcher 会先释放媒体驱动再拉起本程序，
 # 不会冲突。仅当从 SSH / MaixVision 直接启动、且 launcher 或其它应用还在
@@ -164,8 +160,6 @@ SNAPSHOT_COORD_Y_MAX = 2500
 # 实测从被抢占的进程内部去杀占用者会破坏 C++ 侧状态，反而触发
 # _M_create / bad_alloc，所以让路必须在启动本程序之前、在外部完成。
 WAIT_OTHER_APPS = True        # 是否列出仍在运行的其它 MaixCAM 应用
-APP_WAIT_TIMEOUT_MS = 10000   # 保留字段
-MEDIA_SETTLE_MS = 800         # 保留字段
 
 # ==================== 诊断日志 ====================
 # 每 DIAG_LOG_INTERVAL 秒把运行现场追加到 DIAG_LOG_PATH。
@@ -189,7 +183,7 @@ FAULT_DUMP_PATH = "/root/fault_dump.txt"
 
 # ==================== 扫描稳定性配置 ====================
 # 扫描前准备：解决"首轮扫描漏检，后续正常"问题
-# SCAN_REQ到达时托盘可能刚停稳，且摄像头缓冲区可能积压运动过程中的旧帧
+# 采样前托盘可能刚运动，且摄像头缓冲区可能积压旧帧
 SCAN_SETTLE_MS = 300        # 扫描前等待物料稳定的时间(毫秒)
 SCAN_FLUSH_FRAMES = 3       # 采样前丢弃的缓冲旧帧数量
 

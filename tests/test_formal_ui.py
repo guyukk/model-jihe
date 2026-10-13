@@ -127,6 +127,17 @@ class FormalTests(unittest.TestCase):
         self.assertEqual(self.obj.result_filter_stats["truncated"], 1)
         self.assertIn("over 12 items", " ".join(self.obj.result_lines))
 
+    def test_estimated_color_is_visible_without_excluding_item(self):
+        self.obj.vision.last_scan_stats["color_fallback"] = 1
+        self.obj.vision.last_scan_color_estimated = [True]
+        self.scan([self.det])
+        self.assertEqual(self.obj.result_kind, "materials")
+        self.assertEqual(self.obj.result_filter_stats["unknown_color"], 0)
+        self.assertEqual(self.obj.result_color_estimated, 1)
+        self.assertIn("color estimated", self.obj._result_message())
+        self.assertIn("color estimated", " ".join(self.obj.result_lines))
+        self.assertTrue(self.obj._result_problem())
+
     def test_page_preserved_for_12_items_and_clamped_when_shrinking(self):
         self.scan([self.det] * 12)
         self.obj.result_page = 2

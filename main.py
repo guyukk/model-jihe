@@ -346,7 +346,8 @@ class SortingVisionApp:
             image.COLOR_RED if stale else image.COLOR_GREEN, 0.8)
         img.draw_rect(0, 178, self.camera_width, 36, color=image.COLOR_BLACK, thickness=-1)
         send, send_error = self._send_status()
-        screen_ui.fit_text(img, 4, 179, "v%d %s" % (version, send), 312,
+        color_state = self._color_state()
+        screen_ui.fit_text(img, 4, 179, "v%d %s | %s" % (version, send, color_state), 312,
             image.COLOR_RED if send_error else image.COLOR_GREEN, 0.85)
         text = self._result_message()
         log_error = bool(getattr(self.protocol, "log_current_error", "") or (
@@ -358,6 +359,14 @@ class SortingVisionApp:
 
     def _tr(self, zh, en):
         return zh if getattr(self, "chinese", False) else en
+
+    def _color_state(self):
+        vision = getattr(self, "vision", None)
+        if getattr(vision, "color_mode", "hsv") != "lab":
+            return "HSV"
+        count = getattr(vision, "color_calibrated_count", 0)
+        suffix = self._tr(" 缺色可能误判", " partial color risk") if count < 8 else ""
+        return "LAB %d/8%s" % (count, suffix)
 
     def _result_age(self):
         at = getattr(self, "result_completed_at", None)
@@ -377,7 +386,8 @@ class SortingVisionApp:
 
     def _result_problem(self):
         return bool(getattr(self, "scan_error", "") or getattr(self, "result_kind", "") == "filtered"
-                    or any(getattr(self, "result_filter_stats", {}).values()))
+                    or any(getattr(self, "result_filter_stats", {}).values())
+                    or getattr(self, "result_color_estimated", 0))
 
     def _result_message(self):
         if getattr(self, "scan_error", ""):
@@ -397,7 +407,11 @@ class SortingVisionApp:
                 stats.get("unknown_color", 0), stats.get("invalid_coord", 0), stats.get("truncated", 0))
         if kind == "filtered":
             return self._tr("检测到目标，全部未通过 ROI/稳定性筛选", "Targets detected; none passed ROI/stability checks")
-        return self._tr("本轮上报 %d 件", "Reported %d items") % count
+        message = self._tr("本轮上报 %d 件", "Reported %d items") % count
+        estimated = getattr(self, "result_color_estimated", 0)
+        if estimated:
+            message += self._tr("，颜色估测 %d 件", "; color estimated for %d") % estimated
+        return message
 
     def _service(self):
         """只消费链路事件和触摸，不在等待/采样回调中执行业务。"""
@@ -425,7 +439,11 @@ class SortingVisionApp:
         if self.ui.page == screen_ui.PAGE_RESULT:
             send, error = self._send_status()
             age = self._result_age()
-            status = send + (" / %.1fs" % age if age is not None else "")
+            status = send + " / " + self._color_state() + (" / %.1fs" % age if age is not None else "")
+            estimated = getattr(self, "result_color_estimated", 0)
+            if estimated:
+                status += self._tr(" / 颜色估测%d", " / color estimated %d") % estimated
+                error = True
             if age is not None and age > config.RESULT_STALE_SECONDS:
                 status += " / " + self._tr("结果滞留", "STALE")
                 error = True
@@ -558,7 +576,9 @@ class SortingVisionApp:
         journal = getattr(self, "journal", None)
         if journal:
             journal.event("SCAN_TIMING", elapsed_ms=scan_elapsed,
-                frames=getattr(self.vision, "last_frame_metrics", []))
+                frames=getattr(self.vision, "last_frame_metrics", []),
+                color_ms=self.vision.last_scan_stats.get("color_ms", 0),
+                color_mode=getattr(self.vision, "color_mode", "hsv"))
 
         # 安装已完成的快照，发送由通信进程的独立时钟调度
         self.recognizing = False
@@ -575,6 +595,7 @@ class SortingVisionApp:
         self.result_version = getattr(self.protocol, "local_result_version",
                                       getattr(self, "result_version", 0) + 1)
         self.result_filter_stats = dict(getattr(self.protocol, "snapshot_filter_stats", {}))
+        self.result_color_estimated = self.vision.last_scan_stats.get("color_fallback", 0)
         raw_count = self.vision.last_scan_stats.get("yolo_raw", 0)
         self.result_kind = "materials" if sent_count else "filtered" if detections or raw_count else "empty"
         self._capture_scan_result()
@@ -587,7 +608,10 @@ class SortingVisionApp:
         stats = self.vision.last_scan_stats
         print(f"[SCAN] 扫描完成: 耗时{scan_elapsed:.0f}ms, "
               f"YOLO检出={stats['yolo_raw']}, ROI外剔除={stats['roi_out']}, "
-              f"颜色未识别={stats['color_unknown']}, 实际上报={sent_count}")
+              f"颜色未识别={stats['color_unknown']}, "
+              f"颜色估测={stats.get('color_fallback', 0)}, "
+              f"判色耗时={stats.get('color_ms', 0):.1f}ms, "
+              f"模式={getattr(self.vision, 'color_mode', 'hsv')}, 实际上报={sent_count}")
 
         # 返回READY状态
         self._restore_state()
@@ -782,6 +806,7 @@ class SortingVisionApp:
         """只取周期识别数据；每件两行，未上报件明确说明原因。"""
         self.result_lines = []
         items = getattr(self.protocol, "local_items", [])
+        estimated_flags = getattr(self.vision, "last_scan_color_estimated", [])
         for idx, item in enumerate(items):
             cname, sname = screen_ui.names(item["shape"], item["color"], getattr(self, "chinese", False))
             pick = self._tr("可抓", "Pickable") if item["pickable"] else self._tr("不可抓", "Not pickable")
@@ -791,6 +816,8 @@ class SortingVisionApp:
                 "invalid_coord": self._tr("未上报:坐标越界", "Excluded: out of bounds"),
                 "truncated": self._tr("未上报:超过12件", "Excluded: over 12 items"),
             }.get(reason, pick)
+            if idx < len(estimated_flags) and estimated_flags[idx]:
+                reason_text += self._tr(" 颜色估测", " color estimated")
             self.result_lines.append("#%d %s %s %s" % (idx + 1, cname, sname, reason_text))
             self.result_lines.append("  X=%.1fmm Y=%.1fmm" % (item["x"] / 10, item["y"] / 10))
         self.result_title = self._tr("物料 %d 件", "%d materials") % len(items)

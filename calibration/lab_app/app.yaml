@@ -1,0 +1,9 @@
+id: labcal
+name: 颜色标定
+version: 1.0.0
+author: guyukk
+icon: app.png
+desc: 八色 LAB 实物触摸标定，不启动识别或串口
+files:
+  - main.py
+  - lab_color.py

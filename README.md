@@ -1,69 +1,44 @@
 # 智能分拣视觉系统
 
-MaixCAM2视觉从站，应用版本 **3.1.0**，对接每2秒主动推整盘快照协议。
-线上版本字节仍为 **0x02**。规格见 [docs/vision-link-protocol.md](docs/vision-link-protocol.md)，
-实现与联调见 [docs/MCU对接文档.md](docs/MCU对接文档.md)。
+MaixCAM2 上的几何体识别应用，工程版本 **3.2.0**。视觉端按[对接协议](docs/vision-link-protocol.md)每 2 秒主动发送一次整盘快照；线上协议版本字节仍为 `0x02`。当前识别 `cone`、`cube`、`pyramid`；颜色协议编号支持红、橙、黄、绿、蓝、紫、黑、白。未完成 LAB 标定的设备沿用红、黄、蓝、白 HSV 判色。`0x43 SCAN_REQ` 已废弃。
 
-## 运行方式
+## 运行与交互
 
-从设备launcher安装并启动，媒体资源由launcher交接。
-本次工程修改不自动停止设备应用或修改系统AI ISP设置。
+从设备桌面启动“几何体检测”，由 launcher 交接相机、显示和 NPU。`main.py` 负责采集、识别、触摸与显示，`link_service.py` 独立调度 UART4 通信。启动后即按周期识别、发送快照和心跳；MCU 的启动、抓取、复核及完赛事务按协议处理。快照最多 12 件，空盘也发送；慢识别时可重发带原快照号的缓存。串口写出成功仅表示本机完成写入，不能证明 MCU 已收到。
 
-link_service.py独立进程负责通信；模型、相机、触摸和显示保留在main.py。
-通信启动即发初始空缓存，每2秒推最新完整识别结果；慢识别时重发旧缓存，
-旧快照号不变。心跳仍每250ms发送，不等待MCU请求。
-0x43已废弃。快照最多12件，空盘也发，total=count、batch=0。
+主页常显最近一次**完整识别时采集的原始画面**、物料框和名称，扫描中保留旧结果。点击“物料详情”查看形状、颜色、毫米坐标、可抓状态和未上报原因；“长按退出”按住 1.5 秒正常退出应用。分拣页显示序号、名称、形状图示与累计成功数，显示完成后才返回 `0xC4`。界面区分心跳接收、结果年龄和 UART 写出状态，结果超过 15 秒未更新会提示滞留。中文字体加载失败时改用完整英文文案。
 
-屏幕按键：
+## 颜色判定
 
-- 物料详情：周期识别结果的形状、颜色、可抓标志、毫米坐标和未上报原因。
-- 长按退出：按住1.5秒退出视觉程序并关闭通信进程；移出按钮取消。
+物料的形状和位置由 YOLO 与 ROI 决定；颜色从检测框中心 60% 区域采样。`COLOR_MODE="auto"` 时，有效的 `/root/lab_colors.json` 启用 LAB 多样本近邻判色；每类保留至少四个实物样本，不合并为一个大阈值。距离超过样本允许范围，或前两类相距不足 8 LAB 单位，仍给出颜色但标“颜色估测”。界面显示已标定 N/8 色，并提醒缺色可能误判。标定文件缺失或损坏时记录原因并沿用原 HSV 判色；设 `COLOR_MODE="hsv"` 可强制回退。**有效采样框不会仅因颜色阈值而被丢弃**。空框或完全落在图像外的异常框仍可能得到 `unknown`，协议层继续拒绝未知颜色。
 
-主页常显最近完整识别所采样的画面，标出物料名称、框和写出状态；
-识别期间保留旧画面。详情自动更新时保留页号，复核有独立缓存。
-MCU心跳接收、结果年龄和UART完整写出分开显示；“已写出”不代表MCU已收到。
-超过15秒未更新标红“结果滞留”。空盘、全部过滤、首次识别前和识别失败分别提示。
-正式界面移除SCAN/LOAD，参数通过标定工具与配置文件调整后重启生效。
-中文字体加载失败时整套界面改用英文。
+估测不保证弱光、反光、颜色接近或未标定颜色的准确率。多帧投票优先采信非估测结果。独立桌面应用“颜色标定”从原始相机帧点击采样，不启动模型或本工程 UART；见 [LAB 标定说明](docs/LAB颜色标定说明.md)。旧 HSV 标定说明仍见 [HSV 标定说明](docs/HSV标定说明.md)，ROI 见 [ROI 说明](docs/ROI使用说明.md)。保存标定或修改参数后，从桌面重启正式应用生效。
 
-PICK显示序号、名称、形状图示和累计成功数，显示完成后才ACK。
-FINISH后继续快照，摘要保留到下一次SYS_START或退出；线上格式保持原样。
-业务坐标域X=0..1800、Y=0..2500（0.1mm），越界过滤并记录，不钳位。
+## 配置速查
 
-## 打包与目录
+配置集中在 [config.py](config.py)：
 
-app.yaml声明部署契约。权重在models，标定在calibration，测试在tests，
-文档在docs，安装包在dist。运行python tools/package_app.py，
-脚本可将代码、元数据、.mud和引用权重整理到同层。
-**当前app.yaml仍未声明权重，dist包虽已更新界面代码但仍未包含权重；打包回归未通过，
-不能把现有包作为自包含部署交付。** 本阶段用备份后的设备文件更新验证界面。
-MODEL_PATH优先选完整包内模型，旧安装可退回
-/root/models/model-jihe/model_8988.mud。
+| 用途 | 主要参数 | 当前值或单位 |
+| --- | --- | --- |
+| 串口 | `UART_PORT`、`UART_BAUDRATE` | `/dev/ttyS4`，115200 8N1 |
+| 模型 | `MODEL_PATH` | 完整包内 `.mud` 优先；否则回退设备预装路径 |
+| 检测区域 | `ROI_*`、`ROI_CONFIG_PATH` | 320×256 标定坐标；设备 `/root/roi_config.json` 可覆盖 |
+| 颜色 | `COLOR_MODE`、`LAB_CONFIG_PATH`、`LOWER_*`、`UPPER_*` | 默认 auto；有效 LAB 文件优先，HSV 回退 |
+| 检测 | `YOLO_*`、`SCAN_*` | 5 帧、至少 3 帧命中、帧间 50 ms |
+| 坐标 | `COORD_*`、`SNAPSHOT_COORD_*` | 协议坐标单位 0.1 mm；越界件过滤 |
+| 链路与显示 | `HEARTBEAT_INTERVAL`、`LINK_TIMEOUT`、`SNAPSHOT_INTERVAL_MS`、`DISPLAY_DURATION` | 秒或毫秒，见各项注释 |
+| 取证 | `DIAG_*`、`STARTUP_LOG_PATH`、`LINK_LOG_PATH`、`FAULT_DUMP_PATH` | 启动、主进程、通信进程与故障栈日志 |
 
-## 测试
+ROI 与机械可抓范围目前并不完全一致；ROI 左侧的部分目标会因机械 X 坐标越界而不上报。不要通过改颜色阈值掩盖这一类坐标过滤。机械坐标须经实物标定后单独调整。
 
-运行python tools/run_tests.py。每个测试脚本在独立解释器执行，
-避免脚本式sys.exit和Maix桩件污染。新测试覆盖快照黄金向量、周期/缓存/回绕、
-坐标过滤、废弃请求、显示门控和独立通信进程。
-历史算法基线、视觉投票、坐标、标定、接收恢复和串口写返回值测试保留。
-实机仍需抓取10秒原始串口字节验证0x02首字节间隔≤2500ms。
-独立通信可隔离慢媒体调用，无法保证掉电或内核卡死时继续通信。
+## 工程目录与打包
 
-## 标定与故障取证
+根目录是设备运行代码；`models/` 存放权重，`calibration/lab_app/` 是独立触摸标定桌面应用，`tests/` 为本机离线回归，`tools/` 包含打包、测试及 MCU 模拟器，`docs/` 为协议和操作说明，`legacy/` 为历史实现。运行 `python tools/package_app.py` 生成 `dist/maix-test1-v3.2.0.zip`；运行 `python tools/package_lab_app.py` 生成 `dist/maix-labcal-v1.0.0.zip`。正式包的 `.mud` 与两份 `.axmodel` 同层；标定包无模型。旧的非完整安装仍可回退到 `/root/models/model-jihe/model_8988.mud`。
 
-本机可运行 `python tools/mcu_sim.py --list-ports` 查询串口，然后用
-`python tools/mcu_sim.py --port COM19 --duration 1800` 模拟MCU。
-默认实时显示原始收发字节与物料数据，执行30分钟模拟分拣/复核业务。
-COM19需替换为实际端口；日志与报告在`.maixpy/mcu_sim/`。
-详细说明见 [MCU模拟器使用说明](docs/MCU模拟器使用说明.md)。
+## 测试与故障取证
 
-标定工具在calibration，使用说明在docs。参数在config.py。
-ROI默认读取设备/root/roi_config.json。启动阶段日志/root/startup.log，
-媒体循环/root/diag.log，独立通信进程/root/link.log。日志包含boot/run标识、
-单调时间、结果版本/年龄和发送异常，关键启动阶段同步落盘；普通日志各2MiB、3份备份。
-历史日志保留，轮转后带.1/.2/.3后缀。通信日志通过有界队列写盘，丢记录或写失败有计数。
-故障栈在Maix导入前启用，由FAULT_DUMP_PATH配置，启动时轮转；
-运行期间保持该fd有效，供SIGUSR1/致命信号转储。AXERA媒体日志在
-/opt/data/AXSyslog/syslog/，不应仅检查dmesg。
+本机运行 `python tools/run_tests.py`，每个离线测试在独立进程执行；打包前运行 `python tools/package_app.py`，再跑测试以校验安装包内容。串口模拟可先用 `python tools/mcu_sim.py --list-ports` 找端口，再用 `python tools/mcu_sim.py --port COMxx --duration 1800` 运行 30 分钟。原始字节、解析结果和统计报告保存在 `.maixpy/mcu_sim/`；详见 [模拟器说明](docs/MCU模拟器使用说明.md)。
 
-完整操作、验收边界和待单独验证事项见[正式界面说明](docs/正式界面说明.md)。
+设备日志分别在 `/root/startup.log`、`/root/diag.log`、`/root/link.log` 和 `/root/fault_dump.txt`，AXERA 媒体日志在 `/opt/data/AXSyslog/syslog/`。串口模拟、空盘快照及 Python RSS 记录不能证明整机卡死问题已经解决；此前测试曾出现通信中断、识别停滞和设备重启，仍需在真实 MCU、电机及共用供电条件下复现并核对电源与媒体日志。当前仅有空盘条件，非空物料颜色、抓取显示锁步和机械坐标尚未完成实机验收。
+
+界面状态、异常含义和现场验收边界见[正式界面说明](docs/正式界面说明.md)，协议实现细节见[MCU 对接文档](docs/MCU对接文档.md)。
