@@ -12,9 +12,15 @@ ROOT = os.path.dirname(_HERE)
 
 
 def ensure_project_path():
-    """把工程根目录加入模块搜索路径"""
-    if ROOT not in sys.path:
-        sys.path.insert(0, ROOT)
+    """把工程根目录与共享模块目录加入模块搜索路径
+
+    lab_color.py 等被两个 App 共用的模块住在 shared/，打包时才铺平进各自包内；
+    离线运行/测试需把 shared/ 也挂上路径，import 才找得到。
+    """
+    shared = os.path.join(ROOT, "shared")
+    for path in (shared, ROOT):
+        if path not in sys.path:
+            sys.path.insert(0, path)
 
 
 def install_maix_stub():

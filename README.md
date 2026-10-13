@@ -33,7 +33,7 @@ ROI 与机械可抓范围目前并不完全一致；ROI 左侧的部分目标会
 
 ## 工程目录与打包
 
-根目录是设备运行代码；`models/` 存放权重，`calibration/lab_app/` 是独立触摸标定桌面应用，`tests/` 为本机离线回归，`tools/` 包含打包、测试及 MCU 模拟器，`docs/` 为协议和操作说明，`legacy/` 为历史实现。运行 `python tools/package_app.py` 生成 `dist/maix-test1-v3.2.0.zip`；运行 `python tools/package_lab_app.py` 生成 `dist/maix-labcal-v1.0.0.zip`。正式包的 `.mud` 与两份 `.axmodel` 同层；标定包无模型。旧的非完整安装仍可回退到 `/root/models/model-jihe/model_8988.mud`。
+根目录是设备运行代码；`shared/` 存放被两个 App 共用的模块（目前为 `lab_color.py`，打包时才铺平进各自包，避免跨目录隐性引用），`models/` 存放权重，`calibration/lab_app/` 是独立触摸标定桌面应用，`tests/` 为本机离线回归，`tools/` 包含打包、测试及 MCU 模拟器，`docs/` 为协议和操作说明，`legacy/` 为历史实现。运行 `python tools/package_app.py` 生成 `dist/maix-test1-v3.2.0.zip`；运行 `python tools/package_lab_app.py` 生成 `dist/maix-labcal-v1.0.0.zip`。正式包的 `.mud` 与两份 `.axmodel` 同层；标定包无模型。旧的非完整安装仍可回退到 `/root/models/model-jihe/model_8988.mud`。
 
 ## 测试与故障取证
 

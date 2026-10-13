@@ -70,9 +70,12 @@ def mud_assets(mud_path):
 def locate(name):
     """在源码树里定位一个待打包文件
 
-    优先根目录（部署契约文件都在这里），其次 models/（权重按分类存放）。
+    依次查找根目录（部署契约文件都在这里）、models/（权重按分类存放）、
+    以及 shared/（被多个 App 共用的模块，如 lab_color.py）。
     """
-    for cand in (os.path.join(ROOT, name), os.path.join(ROOT, "models", name)):
+    for cand in (os.path.join(ROOT, name),
+                 os.path.join(ROOT, "models", name),
+                 os.path.join(ROOT, "shared", name)):
         if os.path.exists(cand):
             return cand
     return None

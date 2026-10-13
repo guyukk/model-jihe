@@ -50,7 +50,9 @@ def mud_assets(name="model_8988.mud"):
 
 
 def locate(name):
-    for cand in (os.path.join(ROOT, name), os.path.join(ROOT, "models", name)):
+    for cand in (os.path.join(ROOT, name),
+                 os.path.join(ROOT, "models", name),
+                 os.path.join(ROOT, "shared", name)):
         if os.path.exists(cand):
             return cand
     return None
